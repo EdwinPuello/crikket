@@ -10,6 +10,7 @@ import {
   CAPTURE_TAB_ID_STORAGE_KEY,
   type CaptureContext,
   getActiveTabContext,
+  MICROPHONE_ENABLED_STORAGE_KEY,
   RECORDER_TAB_ID_STORAGE_KEY,
   RECORDING_COUNTDOWN_ENDS_AT_STORAGE_KEY,
   RECORDING_IN_PROGRESS_STORAGE_KEY,
@@ -27,6 +28,8 @@ interface UsePopupCaptureReturn {
   captureError: string | null
   pendingCaptureType: PopupCaptureType | null
   recordingCountdown: number | null
+  microphoneEnabled: boolean
+  toggleMicrophone: () => void
   requestCapture: (captureType: PopupCaptureType) => void
   clearPendingCapture: () => void
   startCapture: (captureType: PopupCaptureType) => Promise<void>
@@ -45,6 +48,12 @@ export function usePopupCapture(): UsePopupCaptureReturn {
   )
   const [pendingCaptureType, setPendingCaptureType] =
     useState<PopupCaptureType | null>(null)
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false)
+
+  const toggleMicrophone = () => {
+    setCaptureError(null)
+    setMicrophoneEnabled((prev) => !prev)
+  }
 
   const requestCapture = (captureType: PopupCaptureType) => {
     setCaptureError(null)
@@ -81,6 +90,7 @@ export function usePopupCapture(): UsePopupCaptureReturn {
           activeTab,
           captureContext,
           debuggerSessionId,
+          microphoneEnabled,
           setRecordingCountdown,
         })
       }
@@ -105,6 +115,8 @@ export function usePopupCapture(): UsePopupCaptureReturn {
     captureError,
     pendingCaptureType,
     recordingCountdown,
+    microphoneEnabled,
+    toggleMicrophone,
     requestCapture,
     clearPendingCapture,
     startCapture,
@@ -177,6 +189,7 @@ async function startVideoCapture(input: {
   activeTab: ActiveCaptureTab
   captureContext: CaptureContext
   debuggerSessionId: string
+  microphoneEnabled: boolean
   setRecordingCountdown: (value: number | null) => void
 }): Promise<void> {
   const countdownEndsAt = Date.now() + RECORDING_COUNTDOWN_SECONDS * 1000
@@ -193,6 +206,7 @@ async function startVideoCapture(input: {
   await chrome.storage.local.set({
     [CAPTURE_CONTEXT_STORAGE_KEY]: input.captureContext,
     [CAPTURE_TAB_ID_STORAGE_KEY]: input.activeTab.id,
+    [MICROPHONE_ENABLED_STORAGE_KEY]: input.microphoneEnabled,
     startRecordingImmediately: true,
   })
 

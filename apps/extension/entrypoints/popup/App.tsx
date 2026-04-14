@@ -17,6 +17,8 @@ function App() {
     captureError,
     clearPendingCapture,
     isCapturing,
+    microphoneEnabled,
+    toggleMicrophone,
     pendingCaptureType,
     recordingCountdown: localRecordingCountdown,
     requestCapture,
@@ -71,7 +73,9 @@ function App() {
         <PopupCaptureActions
           isBusy={isBusy}
           isRecordingInProgress={isRecordingInProgress}
+          microphoneEnabled={microphoneEnabled}
           onClearPendingCapture={clearPendingCapture}
+          onMicrophoneToggle={toggleMicrophone}
           onRequestCapture={requestCapture}
           onStartCapture={startCapture}
           onStopFromPopup={stopFromPopup}

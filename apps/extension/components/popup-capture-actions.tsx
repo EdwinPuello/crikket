@@ -1,5 +1,5 @@
 import { Button } from "@crikket/ui/components/ui/button"
-import { Camera, Video } from "lucide-react"
+import { Camera, Mic, MicOff, Video } from "lucide-react"
 import { ShortcutKbd } from "@/components/shortcut-kbd"
 import type { PopupCaptureType } from "@/hooks/use-popup-capture"
 import { formatDuration } from "@/lib/utils"
@@ -13,6 +13,8 @@ interface PopupCaptureActionsProps {
   startRecordingShortcut: string | null
   startScreenshotShortcut: string | null
   stopRecordingShortcut: string | null
+  microphoneEnabled: boolean
+  onMicrophoneToggle: () => void
   onRequestCapture: (captureType: PopupCaptureType) => void
   onStopFromPopup: () => Promise<void>
   onStartCapture: (captureType: PopupCaptureType) => Promise<void>
@@ -28,6 +30,8 @@ export function PopupCaptureActions({
   startRecordingShortcut,
   startScreenshotShortcut,
   stopRecordingShortcut,
+  microphoneEnabled,
+  onMicrophoneToggle,
   onRequestCapture,
   onStopFromPopup,
   onStartCapture,
@@ -100,6 +104,31 @@ export function PopupCaptureActions({
               shortcut={startScreenshotShortcut}
             />
           </Button>
+
+          <button
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={isBusy}
+            onClick={onMicrophoneToggle}
+            type="button"
+          >
+            {microphoneEnabled ? (
+              <Mic className="h-4 w-4 shrink-0 text-primary" />
+            ) : (
+              <MicOff className="h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
+            <span
+              className={
+                microphoneEnabled ? "text-foreground" : "text-muted-foreground"
+              }
+            >
+              {microphoneEnabled ? "Microphone on" : "Microphone off"}
+            </span>
+            <span className="ml-auto">
+              <span
+                className={`inline-block h-4 w-8 rounded-full transition-colors ${microphoneEnabled ? "bg-primary" : "bg-muted-foreground/30"}`}
+              />
+            </span>
+          </button>
         </div>
       )}
 

@@ -17,10 +17,12 @@ import {
 import { AlertCircle } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { FormStep } from "@/components/form-step"
+import { MicReadyStep } from "@/components/mic-ready-step"
 import { RecordingStep } from "@/components/recording-step"
 import { SuccessStep } from "@/components/success-step"
 import { useCaptureContext } from "@/hooks/use-capture-context"
 import { useCommandShortcuts } from "@/hooks/use-command-shortcuts"
+import { useMicAutoStart } from "@/hooks/use-mic-auto-start"
 import { type CaptureType, useRecorderInit } from "@/hooks/use-recorder-init"
 import { useRecorderRecordingSync } from "@/hooks/use-recorder-recording-sync"
 import { useScreenCapture } from "@/hooks/use-screen-capture"
@@ -31,6 +33,7 @@ import {
   markDebuggerRecordingStarted,
 } from "@/lib/bug-report-debugger/client"
 import { submitBugReportWithUploads } from "@/lib/bug-report-upload"
+import { MICROPHONE_ENABLED_STORAGE_KEY } from "@/lib/capture-context"
 import {
   buildCaptureContextSubmissionData,
   type DebuggerCaptureSummary,
@@ -43,7 +46,7 @@ import {
 } from "@/lib/recorder-submit"
 import { formatDuration, getDeviceInfo } from "@/lib/utils"
 
-type State = "idle" | "recording" | "stopped" | "submitting" | "success"
+type State = "idle" | "ready" | "recording" | "stopped" | "submitting" | "success"
 
 interface DebuggerSubmissionInput {
   sessionId: string | null
@@ -56,6 +59,7 @@ function App() {
   const shortcuts = useCommandShortcuts()
   const [state, setState] = useState<State>("idle")
   const [captureType, setCaptureType] = useState<CaptureType>("video")
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(false)
   const [startTime, setStartTime] = useState<number | null>(null)
   const [recordedDurationMs, setRecordedDurationMs] = useState<number | null>(
     null
@@ -73,6 +77,18 @@ function App() {
 
   const captureContext = useCaptureContext()
 
+  useEffect(() => {
+    chrome.storage.local
+      .get([MICROPHONE_ENABLED_STORAGE_KEY])
+      .then((result) => {
+        const stored = result[MICROPHONE_ENABLED_STORAGE_KEY]
+        if (typeof stored === "boolean") {
+          setMicrophoneEnabled(stored)
+        }
+      })
+      .catch(() => undefined)
+  }, [])
+
   const {
     startRecording: startCapture,
     stopRecording: stopCapture,
@@ -82,7 +98,7 @@ function App() {
     error: captureError,
     reset: resetCapture,
     setScreenshotBlob,
-  } = useScreenCapture()
+  } = useScreenCapture({ microphoneEnabled })
 
   const duration = useTimer(startTime, state === "recording")
 
@@ -263,8 +279,14 @@ function App() {
       setState("stopped")
     },
     onStartRecording: handleStartCapture,
+    onReadyToRecord: (micEnabled) => {
+      setMicrophoneEnabled(micEnabled)
+      setState("ready")
+    },
     onError: (err) => setSubmitError(err),
   })
+
+  useMicAutoStart(state, handleStartCapture)
 
   const handleReset = () => {
     resetCapture()
@@ -402,6 +424,10 @@ function App() {
             <p className="text-center text-muted-foreground">
               No active capture. Start from the extension popup.
             </p>
+          ) : null}
+
+          {state === "ready" ? (
+            <MicReadyStep onStart={handleStartCapture} />
           ) : null}
 
           {state === "recording" ? (

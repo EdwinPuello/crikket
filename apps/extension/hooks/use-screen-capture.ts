@@ -1,6 +1,10 @@
 import { useCallback, useRef, useState } from "react"
 import { readAndClearCaptureTabId } from "@/lib/capture-context"
-import { requestTabCaptureStream } from "@/lib/display-media"
+import { requestTabCaptureStreamWithMic } from "@/lib/display-media"
+
+export interface UseScreenCaptureOptions {
+  microphoneEnabled?: boolean
+}
 
 export interface UseScreenCaptureReturn {
   isRecording: boolean
@@ -15,7 +19,11 @@ export interface UseScreenCaptureReturn {
   setScreenshotBlob: (blob: Blob | null) => void
 }
 
-export function useScreenCapture(): UseScreenCaptureReturn {
+export function useScreenCapture(
+  options: UseScreenCaptureOptions = {}
+): UseScreenCaptureReturn {
+  const { microphoneEnabled = false } = options
+
   const [isRecording, setIsRecording] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
   const [screenshotBlob, setScreenshotBlob] = useState<Blob | null>(null)
@@ -23,7 +31,18 @@ export function useScreenCapture(): UseScreenCaptureReturn {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const cleanupRef = useRef<(() => void) | null>(null)
   const chunksRef = useRef<Blob[]>([])
+
+  const stopAllTracks = useCallback(() => {
+    if (streamRef.current) {
+      for (const track of streamRef.current.getTracks()) {
+        track.stop()
+      }
+    }
+    cleanupRef.current?.()
+    cleanupRef.current = null
+  }, [])
 
   const startRecording = useCallback(async (): Promise<boolean> => {
     try {
@@ -37,9 +56,13 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         )
       }
 
-      const stream = await requestTabCaptureStream(captureTabId)
+      const { stream, cleanup } = await requestTabCaptureStreamWithMic(
+        captureTabId,
+        microphoneEnabled
+      )
 
       streamRef.current = stream
+      cleanupRef.current = cleanup
 
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: "video/webm;codecs=vp9",
@@ -58,11 +81,9 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         const blob = new Blob(chunksRef.current, { type: "video/webm" })
         setRecordedBlob(blob)
         setIsRecording(false)
-
-        for (const track of stream.getTracks()) {
-          track.stop()
-        }
+        stopAllTracks()
       }
+
       stream.getVideoTracks()[0].onended = () => {
         if (mediaRecorderRef.current?.state === "recording") {
           mediaRecorderRef.current.stop()
@@ -79,7 +100,7 @@ export function useScreenCapture(): UseScreenCaptureReturn {
       setIsRecording(false)
       return false
     }
-  }, [])
+  }, [microphoneEnabled, stopAllTracks])
 
   const stopRecording = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {
@@ -95,19 +116,13 @@ export function useScreenCapture(): UseScreenCaptureReturn {
         const blob = new Blob(chunksRef.current, { type: "video/webm" })
         setRecordedBlob(blob)
         setIsRecording(false)
-
-        if (streamRef.current) {
-          for (const track of streamRef.current.getTracks()) {
-            track.stop()
-          }
-        }
-
+        stopAllTracks()
         resolve(blob)
       }
 
       mediaRecorderRef.current.stop()
     })
-  }, [])
+  }, [stopAllTracks])
 
   const takeScreenshot = useCallback(async (): Promise<Blob | null> => {
     try {
@@ -174,12 +189,8 @@ export function useScreenCapture(): UseScreenCaptureReturn {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop()
     }
-    if (streamRef.current) {
-      for (const track of streamRef.current.getTracks()) {
-        track.stop()
-      }
-    }
-  }, [])
+    stopAllTracks()
+  }, [stopAllTracks])
 
   return {
     isRecording,

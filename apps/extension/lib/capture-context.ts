@@ -10,6 +10,7 @@ export const RECORDING_STARTED_AT_STORAGE_KEY = "recordingStartedAt"
 export const HOTKEY_START_VIDEO_CAPTURE_STORAGE_KEY = "hotkeyStartVideoCapture"
 export const HOTKEY_START_SCREENSHOT_CAPTURE_STORAGE_KEY =
   "hotkeyStartScreenshotCapture"
+export const MICROPHONE_ENABLED_STORAGE_KEY = "microphoneEnabled"
 
 const isExtensionUrl = (url?: string): boolean =>
   typeof url === "string" &&

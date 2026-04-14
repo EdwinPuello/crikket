@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react"
+import { MICROPHONE_ENABLED_STORAGE_KEY } from "@/lib/capture-context"
 
 export type CaptureType = "video" | "screenshot"
 
@@ -6,6 +7,7 @@ interface UseRecorderInitProps {
   onCaptureTypeChange: (type: CaptureType) => void
   onScreenshotLoaded: (blob: Blob) => void
   onStartRecording: () => void
+  onReadyToRecord: (microphoneEnabled: boolean) => void
   onError: (error: string) => void
 }
 
@@ -13,6 +15,7 @@ export function useRecorderInit({
   onCaptureTypeChange,
   onScreenshotLoaded,
   onStartRecording,
+  onReadyToRecord,
   onError,
 }: UseRecorderInitProps) {
   const autoStartChecked = useRef(false)
@@ -41,12 +44,27 @@ export function useRecorderInit({
       if (autoStartChecked.current) return
       autoStartChecked.current = true
 
-      chrome.storage.local.get(["startRecordingImmediately"], (result) => {
-        if (result.startRecordingImmediately) {
+      chrome.storage.local.get(
+        ["startRecordingImmediately", MICROPHONE_ENABLED_STORAGE_KEY],
+        (result: Record<string, unknown>) => {
+          if (!result.startRecordingImmediately) return
+
           chrome.storage.local.remove(["startRecordingImmediately"])
-          onStartRecording()
+
+          const micEnabled =
+            typeof result[MICROPHONE_ENABLED_STORAGE_KEY] === "boolean"
+              ? (result[MICROPHONE_ENABLED_STORAGE_KEY] as boolean)
+              : false
+
+          chrome.storage.local.remove([MICROPHONE_ENABLED_STORAGE_KEY])
+
+          if (micEnabled) {
+            onReadyToRecord(true)
+          } else {
+            onStartRecording()
+          }
         }
-      })
+      )
     }
-  }, [onCaptureTypeChange, onScreenshotLoaded, onStartRecording, onError])
+  }, [onCaptureTypeChange, onScreenshotLoaded, onStartRecording, onReadyToRecord, onError])
 }
