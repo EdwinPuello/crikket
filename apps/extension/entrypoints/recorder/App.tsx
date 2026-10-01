@@ -23,6 +23,7 @@ import { SuccessStep } from "@/components/success-step"
 import { useCaptureContext } from "@/hooks/use-capture-context"
 import { useCommandShortcuts } from "@/hooks/use-command-shortcuts"
 import { useMicAutoStart } from "@/hooks/use-mic-auto-start"
+import { useMicrophonePreference } from "@/hooks/use-microphone-preference"
 import { type CaptureType, useRecorderInit } from "@/hooks/use-recorder-init"
 import { useRecorderRecordingSync } from "@/hooks/use-recorder-recording-sync"
 import { useScreenCapture } from "@/hooks/use-screen-capture"
@@ -33,7 +34,6 @@ import {
   markDebuggerRecordingStarted,
 } from "@/lib/bug-report-debugger/client"
 import { submitBugReportWithUploads } from "@/lib/bug-report-upload"
-import { MICROPHONE_ENABLED_STORAGE_KEY } from "@/lib/capture-context"
 import {
   buildCaptureContextSubmissionData,
   type DebuggerCaptureSummary,
@@ -46,7 +46,20 @@ import {
 } from "@/lib/recorder-submit"
 import { formatDuration, getDeviceInfo } from "@/lib/utils"
 
-type State = "idle" | "ready" | "recording" | "stopped" | "submitting" | "success"
+type State =
+  | "idle"
+  | "ready"
+  | "recording"
+  | "stopped"
+  | "submitting"
+  | "success"
+
+const STATE_DESCRIPTIONS: Partial<Record<State, string>> = {
+  idle: "Esperando captura",
+  recording: "Grabación en progreso...",
+  stopped: "Revisar y enviar",
+  success: "¡Reporte enviado!",
+}
 
 interface DebuggerSubmissionInput {
   sessionId: string | null
@@ -59,7 +72,7 @@ function App() {
   const shortcuts = useCommandShortcuts()
   const [state, setState] = useState<State>("idle")
   const [captureType, setCaptureType] = useState<CaptureType>("video")
-  const [microphoneEnabled, setMicrophoneEnabled] = useState(false)
+  const [microphoneEnabled, setMicrophoneEnabled] = useMicrophonePreference()
   const [startTime, setStartTime] = useState<number | null>(null)
   const [recordedDurationMs, setRecordedDurationMs] = useState<number | null>(
     null
@@ -76,18 +89,6 @@ function App() {
   )
 
   const captureContext = useCaptureContext()
-
-  useEffect(() => {
-    chrome.storage.local
-      .get([MICROPHONE_ENABLED_STORAGE_KEY])
-      .then((result) => {
-        const stored = result[MICROPHONE_ENABLED_STORAGE_KEY]
-        if (typeof stored === "boolean") {
-          setMicrophoneEnabled(stored)
-        }
-      })
-      .catch(() => undefined)
-  }, [])
 
   const {
     startRecording: startCapture,
@@ -120,7 +121,7 @@ function App() {
     const sessionId = debuggerSessionId
     if (!sessionId) {
       warnings.push(
-        "Debugger session was not found. This report may be missing captured logs."
+        "No se encontró la sesión de depuración. Este reporte puede carecer de registros capturados."
       )
       return {
         sessionId: null,
@@ -142,7 +143,7 @@ function App() {
 
     if (!snapshot) {
       warnings.push(
-        "Debugger snapshot could not be loaded. This report may be missing captured logs."
+        "No se pudo cargar la instantánea de depuración. Este reporte puede carecer de registros capturados."
       )
       return {
         sessionId,
@@ -158,11 +159,11 @@ function App() {
 
     if (!hasPayloadData) {
       warnings.push(
-        "No debugger events were captured yet. Reproduce the issue once before submitting if you need network/action logs."
+        "Aún no se capturaron eventos de depuración. Reproduce el problema antes de enviar si necesitas registros de red/acciones."
       )
     } else if (summary.networkRequests === 0) {
       warnings.push(
-        "No network requests were captured in this recording. API-level debugging data may be incomplete."
+        "No se capturaron solicitudes de red en esta grabación. Los datos de depuración a nivel API pueden estar incompletos."
       )
     }
 
@@ -262,7 +263,7 @@ function App() {
 
         setDebuggerSummary(EMPTY_DEBUGGER_SUMMARY)
         setPreSubmitWarnings([
-          "Could not validate debugger data before submitting.",
+          "No se pudieron validar los datos de depuración antes de enviar.",
         ])
       })
 
@@ -310,7 +311,9 @@ function App() {
   }) => {
     const blob = captureType === "video" ? recordedBlob : screenshotBlob
     if (!blob || blob.size === 0) {
-      setSubmitError("Capture data is missing. Please capture again.")
+      setSubmitError(
+        "Los datos de captura faltan. Por favor, captura nuevamente."
+      )
       setState("stopped")
       return
     }
@@ -381,7 +384,9 @@ function App() {
   const activeBlob = captureType === "video" ? recordedBlob : screenshotBlob
   const suggestedTitle =
     captureContext.title?.trim() ||
-    (captureType === "video" ? "Video bug report" : "Screenshot bug report")
+    (captureType === "video"
+      ? "Reporte de video"
+      : "Reporte de captura de pantalla")
   const previewUrl = useMemo(() => {
     if (!activeBlob) return null
     return URL.createObjectURL(activeBlob)
@@ -391,11 +396,11 @@ function App() {
 
   useEffect(() => {
     if (state === "recording") {
-      document.title = `Recording ${formatDuration(duration)} - Crikket`
+      document.title = `Grabando ${formatDuration(duration)} - Crikket`
       return
     }
 
-    document.title = "Crikket Bug Report"
+    document.title = "Crikket - Reporte de error"
   }, [duration, state])
 
   return (
@@ -403,13 +408,10 @@ function App() {
       <Card className="w-full max-w-3xl border-border/80 shadow-lg shadow-slate-950/5">
         <CardHeader className="gap-2 border-b bg-muted/20 text-left">
           <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
-            Crikket Bug Report
+            Crikket - Reporte de error
           </CardTitle>
           <CardDescription className="text-sm">
-            {state === "idle" && "Waiting for capture"}
-            {state === "recording" && "Recording in progress..."}
-            {state === "stopped" && "Review and submit"}
-            {state === "success" && "Report submitted!"}
+            {STATE_DESCRIPTIONS[state]}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 px-6 py-6">
@@ -422,7 +424,7 @@ function App() {
 
           {state === "idle" ? (
             <p className="text-center text-muted-foreground">
-              No active capture. Start from the extension popup.
+              Sin captura activa. Inicia desde el popup de la extensión.
             </p>
           ) : null}
 

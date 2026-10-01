@@ -40,7 +40,7 @@ export function PopupCaptureActions({
   if (recordingCountdown) {
     return (
       <div className="rounded-md border bg-primary/5 p-3 text-center">
-        <p className="font-medium text-sm">Recording starts in</p>
+        <p className="font-medium text-sm">La grabación comienza en</p>
         <p className="font-bold text-2xl">{recordingCountdown}...</p>
       </div>
     )
@@ -52,7 +52,7 @@ export function PopupCaptureActions({
         <div className="space-y-2">
           <div className="rounded-md border bg-destructive/5 p-3 text-center">
             <p className="font-medium text-destructive text-sm">
-              Recording now
+              Grabando ahora
             </p>
             <p className="font-mono font-semibold text-destructive text-xl">
               {formatDuration(recordingDurationMs)}
@@ -66,7 +66,7 @@ export function PopupCaptureActions({
             variant="destructive"
           >
             <Video className="h-5 w-5" />
-            <span>Stop Recording</span>
+            <span>Detener grabación</span>
             <ShortcutKbd
               className="bg-destructive-foreground/15 text-destructive-foreground"
               shortcut={stopRecordingShortcut}
@@ -83,7 +83,7 @@ export function PopupCaptureActions({
             variant="default"
           >
             <Video className="h-5 w-5" />
-            <span>Record Screen</span>
+            <span>Grabar pantalla</span>
             <ShortcutKbd
               className="bg-primary-foreground/15 text-primary-foreground"
               shortcut={startRecordingShortcut}
@@ -98,7 +98,7 @@ export function PopupCaptureActions({
             variant="outline"
           >
             <Camera className="h-5 w-5" />
-            <span>Take Screenshot</span>
+            <span>Tomar captura</span>
             <ShortcutKbd
               className="bg-muted text-foreground"
               shortcut={startScreenshotShortcut}
@@ -121,7 +121,9 @@ export function PopupCaptureActions({
                 microphoneEnabled ? "text-foreground" : "text-muted-foreground"
               }
             >
-              {microphoneEnabled ? "Microphone on" : "Microphone off"}
+              {microphoneEnabled
+                ? "Micrófono activado"
+                : "Micrófono desactivado"}
             </span>
             <span className="ml-auto">
               <span
@@ -135,8 +137,11 @@ export function PopupCaptureActions({
       {pendingCaptureType ? (
         <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3">
           <p className="text-sm">
-            Allow Crikket to capture your current tab for{" "}
-            {pendingCaptureType === "video" ? "recording" : "screenshot"}?
+            ¿Permitir a Crikket capturar tu pestaña actual para{" "}
+            {pendingCaptureType === "video"
+              ? "grabación"
+              : "captura de pantalla"}
+            ?
           </p>
           <div className="flex gap-2">
             <Button
@@ -145,7 +150,7 @@ export function PopupCaptureActions({
               onClick={() => onStartCapture(pendingCaptureType)}
               size="sm"
             >
-              Continue
+              Continuar
             </Button>
             <Button
               className="flex-1"
@@ -154,7 +159,7 @@ export function PopupCaptureActions({
               size="sm"
               variant="outline"
             >
-              Cancel
+              Cancelar
             </Button>
           </div>
         </div>

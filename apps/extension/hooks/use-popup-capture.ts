@@ -21,7 +21,7 @@ export type PopupCaptureType = "video" | "screenshot"
 
 const RECORDING_COUNTDOWN_SECONDS = 3
 const ACTIVE_TAB_ERROR_MESSAGE =
-  "Could not find an active browser tab to capture."
+  "No se encontró una pestaña de navegador activa para capturar."
 
 interface UsePopupCaptureReturn {
   isCapturing: boolean
