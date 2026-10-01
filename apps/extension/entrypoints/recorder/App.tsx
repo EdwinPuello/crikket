@@ -44,7 +44,7 @@ import {
   isUnauthorizedSubmissionError,
   normalizeOptionalText,
 } from "@/lib/recorder-submit"
-import { formatDuration, getDeviceInfo } from "@/lib/utils"
+import { focusCurrentTab, formatDuration, getDeviceInfo } from "@/lib/utils"
 
 type State =
   | "idle"
@@ -73,6 +73,7 @@ function App() {
   const [state, setState] = useState<State>("idle")
   const [captureType, setCaptureType] = useState<CaptureType>("video")
   const [microphoneEnabled, setMicrophoneEnabled] = useMicrophonePreference()
+  const [fullScreenEnabled, setFullScreenEnabled] = useState(false)
   const [startTime, setStartTime] = useState<number | null>(null)
   const [recordedDurationMs, setRecordedDurationMs] = useState<number | null>(
     null
@@ -99,7 +100,7 @@ function App() {
     error: captureError,
     reset: resetCapture,
     setScreenshotBlob,
-  } = useScreenCapture({ microphoneEnabled })
+  } = useScreenCapture({ fullScreenEnabled, microphoneEnabled })
 
   const duration = useTimer(startTime, state === "recording")
 
@@ -232,6 +233,11 @@ function App() {
         setRecordedDurationMs(Math.max(0, Date.now() - startTime))
       }
       setState("stopped")
+      // The capture ended on its own (e.g. the browser's "Stop sharing"
+      // button), so bring the review form back into view.
+      focusCurrentTab().catch((error: unknown) => {
+        reportNonFatalError("Failed to focus recorder tab after capture", error)
+      })
     }
   }, [recordedBlob, startTime, state])
 
@@ -280,14 +286,15 @@ function App() {
       setState("stopped")
     },
     onStartRecording: handleStartCapture,
-    onReadyToRecord: (micEnabled) => {
-      setMicrophoneEnabled(micEnabled)
+    onReadyToRecord: (options) => {
+      setMicrophoneEnabled(options.microphoneEnabled)
+      setFullScreenEnabled(options.fullScreenEnabled)
       setState("ready")
     },
     onError: (err) => setSubmitError(err),
   })
 
-  useMicAutoStart(state, handleStartCapture)
+  useMicAutoStart(state, handleStartCapture, !fullScreenEnabled)
 
   const handleReset = () => {
     resetCapture()
@@ -429,7 +436,11 @@ function App() {
           ) : null}
 
           {state === "ready" ? (
-            <MicReadyStep onStart={handleStartCapture} />
+            <MicReadyStep
+              fullScreenEnabled={fullScreenEnabled}
+              microphoneEnabled={microphoneEnabled}
+              onStart={handleStartCapture}
+            />
           ) : null}
 
           {state === "recording" ? (

@@ -1,6 +1,6 @@
 import { appendDebuggerSessionIdToUrl } from "@crikket/capture-core/debugger/recorder-session"
 import { reportNonFatalError } from "@crikket/shared/lib/errors"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   discardDebuggerSession,
   startDebuggerSession,
@@ -9,6 +9,8 @@ import {
   CAPTURE_CONTEXT_STORAGE_KEY,
   CAPTURE_TAB_ID_STORAGE_KEY,
   type CaptureContext,
+  FULL_SCREEN_ENABLED_STORAGE_KEY,
+  FULL_SCREEN_PREFERENCE_STORAGE_KEY,
   getActiveTabContext,
   MICROPHONE_ENABLED_STORAGE_KEY,
   RECORDER_TAB_ID_STORAGE_KEY,
@@ -30,6 +32,8 @@ interface UsePopupCaptureReturn {
   recordingCountdown: number | null
   microphoneEnabled: boolean
   toggleMicrophone: () => void
+  fullScreenEnabled: boolean
+  toggleFullScreen: () => void
   requestCapture: (captureType: PopupCaptureType) => void
   clearPendingCapture: () => void
   startCapture: (captureType: PopupCaptureType) => Promise<void>
@@ -49,10 +53,30 @@ export function usePopupCapture(): UsePopupCaptureReturn {
   const [pendingCaptureType, setPendingCaptureType] =
     useState<PopupCaptureType | null>(null)
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false)
+  const [fullScreenEnabled, setFullScreenEnabled] = useState(false)
+
+  useEffect(() => {
+    readFullScreenPreference()
+      .then(setFullScreenEnabled)
+      .catch((error: unknown) => {
+        reportNonFatalError("Failed to load full screen preference", error)
+      })
+  }, [])
 
   const toggleMicrophone = () => {
     setCaptureError(null)
     setMicrophoneEnabled((prev) => !prev)
+  }
+
+  const toggleFullScreen = () => {
+    setCaptureError(null)
+    const next = !fullScreenEnabled
+    setFullScreenEnabled(next)
+    chrome.storage.local
+      .set({ [FULL_SCREEN_PREFERENCE_STORAGE_KEY]: next })
+      .catch((error: unknown) => {
+        reportNonFatalError("Failed to save full screen preference", error)
+      })
   }
 
   const requestCapture = (captureType: PopupCaptureType) => {
@@ -91,6 +115,7 @@ export function usePopupCapture(): UsePopupCaptureReturn {
           captureContext,
           debuggerSessionId,
           microphoneEnabled,
+          fullScreenEnabled: await readFullScreenPreference(),
           setRecordingCountdown,
         })
       }
@@ -117,6 +142,8 @@ export function usePopupCapture(): UsePopupCaptureReturn {
     recordingCountdown,
     microphoneEnabled,
     toggleMicrophone,
+    fullScreenEnabled,
+    toggleFullScreen,
     requestCapture,
     clearPendingCapture,
     startCapture,
@@ -190,23 +217,20 @@ async function startVideoCapture(input: {
   captureContext: CaptureContext
   debuggerSessionId: string
   microphoneEnabled: boolean
+  fullScreenEnabled: boolean
   setRecordingCountdown: (value: number | null) => void
 }): Promise<void> {
-  const countdownEndsAt = Date.now() + RECORDING_COUNTDOWN_SECONDS * 1000
-
-  await chrome.storage.local.set({
-    [RECORDING_IN_PROGRESS_STORAGE_KEY]: true,
-    [RECORDING_COUNTDOWN_ENDS_AT_STORAGE_KEY]: countdownEndsAt,
-  })
-
-  await runCountdown(input.setRecordingCountdown)
-
-  await chrome.storage.local.remove([RECORDING_COUNTDOWN_ENDS_AT_STORAGE_KEY])
+  // Full screen recording waits for the user to pick a screen in the
+  // recorder tab, so a countdown here would only delay that step.
+  if (!input.fullScreenEnabled) {
+    await runRecordingCountdown(input.setRecordingCountdown)
+  }
 
   await chrome.storage.local.set({
     [CAPTURE_CONTEXT_STORAGE_KEY]: input.captureContext,
     [CAPTURE_TAB_ID_STORAGE_KEY]: input.activeTab.id,
     [MICROPHONE_ENABLED_STORAGE_KEY]: input.microphoneEnabled,
+    [FULL_SCREEN_ENABLED_STORAGE_KEY]: input.fullScreenEnabled,
     startRecordingImmediately: true,
   })
 
@@ -216,7 +240,7 @@ async function startVideoCapture(input: {
   )
 
   const recorderTab = await chrome.tabs.create({
-    active: false,
+    active: input.fullScreenEnabled,
     url: recorderUrl,
   })
 
@@ -225,6 +249,21 @@ async function startVideoCapture(input: {
       [RECORDER_TAB_ID_STORAGE_KEY]: recorderTab.id,
     })
   }
+}
+
+async function runRecordingCountdown(
+  setRecordingCountdown: (value: number | null) => void
+): Promise<void> {
+  const countdownEndsAt = Date.now() + RECORDING_COUNTDOWN_SECONDS * 1000
+
+  await chrome.storage.local.set({
+    [RECORDING_IN_PROGRESS_STORAGE_KEY]: true,
+    [RECORDING_COUNTDOWN_ENDS_AT_STORAGE_KEY]: countdownEndsAt,
+  })
+
+  await runCountdown(setRecordingCountdown)
+
+  await chrome.storage.local.remove([RECORDING_COUNTDOWN_ENDS_AT_STORAGE_KEY])
 }
 
 async function runCountdown(
@@ -278,4 +317,13 @@ async function handleCaptureFailure(input: {
   ])
 
   input.setIsCapturing(false)
+}
+
+// Read from storage rather than React state so hotkey-triggered captures,
+// which start before the popup finishes loading, still honor the choice.
+async function readFullScreenPreference(): Promise<boolean> {
+  const result = await chrome.storage.local.get([
+    FULL_SCREEN_PREFERENCE_STORAGE_KEY,
+  ])
+  return result[FULL_SCREEN_PREFERENCE_STORAGE_KEY] === true
 }

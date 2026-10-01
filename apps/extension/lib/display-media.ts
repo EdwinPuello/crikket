@@ -5,7 +5,12 @@ interface TabCaptureConstraints extends MediaTrackConstraints {
   }
 }
 
-export interface TabCaptureStreamResult {
+interface ScreenCaptureOptions extends DisplayMediaStreamOptions {
+  monitorTypeSurfaces?: "include" | "exclude"
+  selfBrowserSurface?: "include" | "exclude"
+}
+
+export interface CaptureStreamResult {
   stream: MediaStream
   cleanup: () => void
 }
@@ -30,14 +35,33 @@ export const requestTabCaptureStream = async (
   return stream
 }
 
-export const requestTabCaptureStreamWithMic = async (
-  tabId: number,
-  microphoneEnabled: boolean
-): Promise<TabCaptureStreamResult> => {
-  const tabStream = await requestTabCaptureStream(tabId)
+/**
+ * Asks the user to pick a full screen to record. Must be called from a user
+ * gesture, since browsers require transient activation for getDisplayMedia.
+ */
+export const requestScreenCaptureStream = (): Promise<MediaStream> => {
+  const options: ScreenCaptureOptions = {
+    audio: false,
+    video: { displaySurface: "monitor" },
+    monitorTypeSurfaces: "include",
+    selfBrowserSurface: "exclude",
+  }
 
+  return navigator.mediaDevices.getDisplayMedia(options)
+}
+
+const stopTracks = (stream: MediaStream | null): void => {
+  for (const track of stream?.getTracks() ?? []) {
+    track.stop()
+  }
+}
+
+export const attachMicrophone = async (
+  videoStream: MediaStream,
+  microphoneEnabled: boolean
+): Promise<CaptureStreamResult> => {
   if (!microphoneEnabled) {
-    return { stream: tabStream, cleanup: () => undefined }
+    return { stream: videoStream, cleanup: () => undefined }
   }
 
   let micStream: MediaStream | null = null
@@ -54,26 +78,37 @@ export const requestTabCaptureStreamWithMic = async (
     const micSource = audioCtx.createMediaStreamSource(micStream)
     micSource.connect(destination)
 
-    const videoTrack = tabStream.getVideoTracks()[0]
+    const videoTrack = videoStream.getVideoTracks()[0]
     const mixedStream = new MediaStream([
       videoTrack,
       ...destination.stream.getAudioTracks(),
     ])
 
     const cleanup = () => {
-      for (const track of micStream?.getTracks() ?? []) {
-        track.stop()
-      }
+      stopTracks(micStream)
       audioCtx?.close().catch(() => undefined)
     }
 
     return { stream: mixedStream, cleanup }
   } catch {
-    // Graceful fallback: mic unavailable, record screen only
-    for (const track of micStream?.getTracks() ?? []) {
-      track.stop()
-    }
+    // Graceful fallback: mic unavailable, record video only
+    stopTracks(micStream)
     audioCtx?.close().catch(() => undefined)
-    return { stream: tabStream, cleanup: () => undefined }
+    return { stream: videoStream, cleanup: () => undefined }
   }
+}
+
+export const requestTabCaptureStreamWithMic = async (
+  tabId: number,
+  microphoneEnabled: boolean
+): Promise<CaptureStreamResult> => {
+  const tabStream = await requestTabCaptureStream(tabId)
+  return attachMicrophone(tabStream, microphoneEnabled)
+}
+
+export const requestScreenCaptureStreamWithMic = async (
+  microphoneEnabled: boolean
+): Promise<CaptureStreamResult> => {
+  const screenStream = await requestScreenCaptureStream()
+  return attachMicrophone(screenStream, microphoneEnabled)
 }

@@ -1,9 +1,35 @@
 import { useCallback, useRef, useState } from "react"
 import { readAndClearCaptureTabId } from "@/lib/capture-context"
-import { requestTabCaptureStreamWithMic } from "@/lib/display-media"
+import {
+  type CaptureStreamResult,
+  requestScreenCaptureStreamWithMic,
+  requestTabCaptureStreamWithMic,
+} from "@/lib/display-media"
 
 export interface UseScreenCaptureOptions {
+  fullScreenEnabled?: boolean
   microphoneEnabled?: boolean
+}
+
+async function requestCaptureStream(input: {
+  fullScreenEnabled: boolean
+  microphoneEnabled: boolean
+}): Promise<CaptureStreamResult> {
+  // Always consume the locked tab id so a stale value never leaks into a
+  // later recording, even when the full screen is captured instead.
+  const captureTabId = await readAndClearCaptureTabId()
+
+  if (input.fullScreenEnabled) {
+    return requestScreenCaptureStreamWithMic(input.microphoneEnabled)
+  }
+
+  if (!captureTabId) {
+    throw new Error(
+      "Could not lock the source tab. Please start recording from the extension popup."
+    )
+  }
+
+  return requestTabCaptureStreamWithMic(captureTabId, input.microphoneEnabled)
 }
 
 export interface UseScreenCaptureReturn {
@@ -22,7 +48,7 @@ export interface UseScreenCaptureReturn {
 export function useScreenCapture(
   options: UseScreenCaptureOptions = {}
 ): UseScreenCaptureReturn {
-  const { microphoneEnabled = false } = options
+  const { fullScreenEnabled = false, microphoneEnabled = false } = options
 
   const [isRecording, setIsRecording] = useState(false)
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null)
@@ -49,17 +75,10 @@ export function useScreenCapture(
       setError(null)
       setRecordedBlob(null)
 
-      const captureTabId = await readAndClearCaptureTabId()
-      if (!captureTabId) {
-        throw new Error(
-          "Could not lock the source tab. Please start recording from the extension popup."
-        )
-      }
-
-      const { stream, cleanup } = await requestTabCaptureStreamWithMic(
-        captureTabId,
-        microphoneEnabled
-      )
+      const { stream, cleanup } = await requestCaptureStream({
+        fullScreenEnabled,
+        microphoneEnabled,
+      })
 
       streamRef.current = stream
       cleanupRef.current = cleanup
@@ -100,7 +119,7 @@ export function useScreenCapture(
       setIsRecording(false)
       return false
     }
-  }, [microphoneEnabled, stopAllTracks])
+  }, [fullScreenEnabled, microphoneEnabled, stopAllTracks])
 
   const stopRecording = useCallback((): Promise<Blob | null> => {
     return new Promise((resolve) => {

@@ -19,6 +19,8 @@ function App() {
     isCapturing,
     microphoneEnabled,
     toggleMicrophone,
+    fullScreenEnabled,
+    toggleFullScreen,
     pendingCaptureType,
     recordingCountdown: localRecordingCountdown,
     requestCapture,
@@ -71,10 +73,12 @@ function App() {
         ) : null}
 
         <PopupCaptureActions
+          fullScreenEnabled={fullScreenEnabled}
           isBusy={isBusy}
           isRecordingInProgress={isRecordingInProgress}
           microphoneEnabled={microphoneEnabled}
           onClearPendingCapture={clearPendingCapture}
+          onFullScreenToggle={toggleFullScreen}
           onMicrophoneToggle={toggleMicrophone}
           onRequestCapture={requestCapture}
           onStartCapture={startCapture}
@@ -89,8 +93,10 @@ function App() {
 
         <div className="rounded-md border bg-muted p-3">
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Solo capturamos tu pestaña actual. Se abrirá una nueva pestaña para
-            que revises y envíes tu reporte.
+            {fullScreenEnabled
+              ? "Las grabaciones capturarán la pantalla que elijas; las capturas de pantalla siguen siendo de tu pestaña actual."
+              : "Solo capturamos tu pestaña actual."}{" "}
+            Se abrirá una nueva pestaña para que revises y envíes tu reporte.
           </p>
         </div>
 

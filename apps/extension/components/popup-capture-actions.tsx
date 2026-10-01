@@ -1,5 +1,6 @@
 import { Button } from "@crikket/ui/components/ui/button"
-import { Camera, Mic, MicOff, Video } from "lucide-react"
+import { AppWindow, Camera, Mic, MicOff, Monitor, Video } from "lucide-react"
+import { CaptureOptionToggle } from "@/components/capture-option-toggle"
 import { ShortcutKbd } from "@/components/shortcut-kbd"
 import type { PopupCaptureType } from "@/hooks/use-popup-capture"
 import { formatDuration } from "@/lib/utils"
@@ -15,6 +16,8 @@ interface PopupCaptureActionsProps {
   stopRecordingShortcut: string | null
   microphoneEnabled: boolean
   onMicrophoneToggle: () => void
+  fullScreenEnabled: boolean
+  onFullScreenToggle: () => void
   onRequestCapture: (captureType: PopupCaptureType) => void
   onStopFromPopup: () => Promise<void>
   onStartCapture: (captureType: PopupCaptureType) => Promise<void>
@@ -32,6 +35,8 @@ export function PopupCaptureActions({
   stopRecordingShortcut,
   microphoneEnabled,
   onMicrophoneToggle,
+  fullScreenEnabled,
+  onFullScreenToggle,
   onRequestCapture,
   onStopFromPopup,
   onStartCapture,
@@ -105,43 +110,36 @@ export function PopupCaptureActions({
             />
           </Button>
 
-          <button
-            className="flex w-full cursor-pointer items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/70 disabled:cursor-not-allowed disabled:opacity-50"
+          <CaptureOptionToggle
+            checked={microphoneEnabled}
             disabled={isBusy}
-            onClick={onMicrophoneToggle}
-            type="button"
-          >
-            {microphoneEnabled ? (
-              <Mic className="h-4 w-4 shrink-0 text-primary" />
-            ) : (
+            iconOff={
               <MicOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-            )}
-            <span
-              className={
-                microphoneEnabled ? "text-foreground" : "text-muted-foreground"
-              }
-            >
-              {microphoneEnabled
-                ? "Micrófono activado"
-                : "Micrófono desactivado"}
-            </span>
-            <span className="ml-auto">
-              <span
-                className={`inline-block h-4 w-8 rounded-full transition-colors ${microphoneEnabled ? "bg-primary" : "bg-muted-foreground/30"}`}
-              />
-            </span>
-          </button>
+            }
+            iconOn={<Mic className="h-4 w-4 shrink-0 text-primary" />}
+            labelOff="Micrófono desactivado"
+            labelOn="Micrófono activado"
+            onToggle={onMicrophoneToggle}
+          />
+
+          <CaptureOptionToggle
+            checked={fullScreenEnabled}
+            disabled={isBusy}
+            iconOff={
+              <AppWindow className="h-4 w-4 shrink-0 text-muted-foreground" />
+            }
+            iconOn={<Monitor className="h-4 w-4 shrink-0 text-primary" />}
+            labelOff="Pantalla completa desactivada"
+            labelOn="Pantalla completa activada"
+            onToggle={onFullScreenToggle}
+          />
         </div>
       )}
 
       {pendingCaptureType ? (
         <div className="space-y-2 rounded-md border border-primary/20 bg-primary/5 p-3">
           <p className="text-sm">
-            ¿Permitir a Crikket capturar tu pestaña actual para{" "}
-            {pendingCaptureType === "video"
-              ? "grabación"
-              : "captura de pantalla"}
-            ?
+            {getCaptureConfirmation(pendingCaptureType, fullScreenEnabled)}
           </p>
           <div className="flex gap-2">
             <Button
@@ -166,4 +164,19 @@ export function PopupCaptureActions({
       ) : null}
     </>
   )
+}
+
+function getCaptureConfirmation(
+  captureType: PopupCaptureType,
+  fullScreenEnabled: boolean
+): string {
+  if (captureType === "screenshot") {
+    return "¿Permitir a Crikket capturar tu pestaña actual para captura de pantalla?"
+  }
+
+  if (fullScreenEnabled) {
+    return "¿Permitir a Crikket grabar tu pantalla completa? Podrás elegir qué pantalla grabar."
+  }
+
+  return "¿Permitir a Crikket capturar tu pestaña actual para grabación?"
 }
