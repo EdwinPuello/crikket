@@ -1,7 +1,15 @@
 import { reportNonFatalError } from "@crikket/shared/lib/errors"
 import { InteractiveImageViewer } from "@crikket/ui/components/interactive-image-viewer"
+import { Button } from "@crikket/ui/components/ui/button"
 import { FileText } from "lucide-react"
-import { forwardRef, type SyntheticEvent, useCallback, useRef } from "react"
+import {
+  forwardRef,
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import type { SharedBugReport } from "./types"
 
 interface BugReportCanvasProps {
@@ -23,6 +31,14 @@ function getMetadataDurationMs(metadata: unknown): number | null {
   return Math.max(0, Math.floor(durationMs))
 }
 
+const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 2] as const
+
+function applyPlaybackSpeed(player: HTMLVideoElement, speed: number) {
+  // defaultPlaybackRate keeps the speed when the media reloads
+  player.defaultPlaybackRate = speed
+  player.playbackRate = speed
+}
+
 export const BugReportCanvas = forwardRef<
   HTMLVideoElement,
   BugReportCanvasProps
@@ -33,10 +49,31 @@ export const BugReportCanvas = forwardRef<
     data.attachmentType === "screenshot" && Boolean(data.attachmentUrl)
   const metadataDurationMs = getMetadataDurationMs(data.metadata)
   const isPrimingDurationRef = useRef(false)
+  const playerRef = useRef<HTMLVideoElement | null>(null)
+  const [playbackSpeed, setPlaybackSpeed] = useState(1)
+
+  const setPlayerRef = useCallback(
+    (player: HTMLVideoElement | null) => {
+      playerRef.current = player
+      if (typeof ref === "function") {
+        ref(player)
+      } else if (ref) {
+        ref.current = player
+      }
+    },
+    [ref]
+  )
+
+  useEffect(() => {
+    if (playerRef.current) {
+      applyPlaybackSpeed(playerRef.current, playbackSpeed)
+    }
+  }, [playbackSpeed])
 
   const handleLoadedMetadata = useCallback(
     (event: SyntheticEvent<HTMLVideoElement>) => {
       const player = event.currentTarget
+      applyPlaybackSpeed(player, playbackSpeed)
       if (isPrimingDurationRef.current) {
         return
       }
@@ -93,7 +130,7 @@ export const BugReportCanvas = forwardRef<
         isPrimingDurationRef.current = false
       }
     },
-    [metadataDurationMs]
+    [metadataDurationMs, playbackSpeed]
   )
 
   return (
@@ -112,25 +149,58 @@ export const BugReportCanvas = forwardRef<
         }
       >
         {showVideo ? (
-          // biome-ignore lint/a11y/useMediaCaption: uploaded bug recordings do not have caption tracks yet
-          <video
+          <div
             className={
               compact
-                ? "h-auto w-full bg-black object-contain outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                : "max-h-full max-w-full rounded-lg bg-black object-contain shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                ? "flex w-full flex-col"
+                : "flex h-full w-full flex-col items-center justify-center gap-2"
             }
-            controls
-            onLoadedMetadata={handleLoadedMetadata}
-            onTimeUpdate={(event) => {
-              if (isPrimingDurationRef.current) {
-                return
+          >
+            {/* biome-ignore lint/a11y/useMediaCaption: uploaded bug recordings do not have caption tracks yet */}
+            <video
+              className={
+                compact
+                  ? "h-auto w-full bg-black object-contain outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  : "min-h-0 max-w-full rounded-lg bg-black object-contain shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
               }
-              onTimeUpdate?.(event.currentTarget.currentTime * 1000)
-            }}
-            preload="metadata"
-            ref={ref}
-            src={data.attachmentUrl ?? undefined}
-          />
+              controls
+              onLoadedMetadata={handleLoadedMetadata}
+              onRateChange={(event) => {
+                // Keep the selector in sync when the speed is changed from the native controls
+                setPlaybackSpeed(event.currentTarget.playbackRate)
+              }}
+              onTimeUpdate={(event) => {
+                if (isPrimingDurationRef.current) {
+                  return
+                }
+                onTimeUpdate?.(event.currentTarget.currentTime * 1000)
+              }}
+              preload="metadata"
+              ref={setPlayerRef}
+              src={data.attachmentUrl ?? undefined}
+            />
+            <fieldset
+              aria-label="Playback speed"
+              className={
+                compact
+                  ? "flex shrink-0 items-center justify-end gap-1 px-2 py-1.5"
+                  : "flex shrink-0 items-center gap-1"
+              }
+            >
+              {PLAYBACK_SPEEDS.map((speed) => (
+                <Button
+                  aria-pressed={playbackSpeed === speed}
+                  key={speed}
+                  onClick={() => setPlaybackSpeed(speed)}
+                  size="xs"
+                  type="button"
+                  variant={playbackSpeed === speed ? "secondary" : "ghost"}
+                >
+                  {speed}x
+                </Button>
+              ))}
+            </fieldset>
+          </div>
         ) : showImage ? (
           <InteractiveImageViewer
             alt={data.title ?? "Bug report attachment"}
